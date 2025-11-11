@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <title>TapLog — Acciones rápidas</title>
+  <style>
+    :root { --pad: 14px; --radius: 14px; --bg: #0f0f10; --card:#1a1b1e; --muted:#a5a7ad; --fg:#fff; --accent:#4b8ef7; }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; font-family: -apple-system, system-ui, Segoe UI, Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--fg); }
+    header { position: sticky; top: 0; padding: calc(var(--pad) + env(safe-area-inset-top)) var(--pad) var(--pad); background: linear-gradient(180deg, rgba(15,15,16,0.9), rgba(15,15,16,0.6), rgba(15,15,16,0)); backdrop-filter: saturate(120%) blur(8px); -webkit-backdrop-filter: saturate(120%) blur(8px); z-index: 10; }
+    h1 { font-size: 22px; margin: 0 0 6px 0; }
+    .muted { color: var(--muted); font-size: 14px; }
+    main { padding: 0 var(--pad) calc(64px + env(safe-area-inset-bottom)); }
+    .card { background: var(--card); border-radius: var(--radius); padding: var(--pad); margin: 12px 0; }
+    .row { display:flex; gap:10px; }
+    .row > * { flex:1; }
+    input[type="text"], input[type="datetime-local"], textarea, select { width: 100%; padding: 12px; background: #101114; border: 1px solid #2b2d31; color: var(--fg); border-radius: 12px; }
+    button { appearance: none; border: none; border-radius: 12px; padding: 14px 16px; font-weight: 600; background: #2b2f36; color: var(--fg); cursor: pointer; }
+    button.primary { background: var(--accent); color: #fff; }
+    button.ghost { background: transparent; border: 1px solid #2b2d31; }
+    .action { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap: wrap; }
+    .title { font-weight: 600; font-size: 17px; }
+    .subtitle { color: var(--muted); font-size: 13px; }
+    .pill { font-size: 12px; padding: 6px 8px; border-radius: 999px; background:#2b2f36; color: var(--muted); }
+    .grid { display:grid; grid-template-columns: repeat(2,1fr); gap:10px; }
+    .list { display:flex; flex-direction:column; gap:8px; }
+    .log-item { display:flex; gap:8px; align-items:center; }
+    .log-item input { flex:1; }
+    .empty { text-align:center; padding: 24px; color: var(--muted); }
+    .compat { display:flex; gap:8px; align-items:center; margin-top:8px; }
+    .compat label { font-size:12px; color:var(--muted); }
+  </style>
+</head>
+<body>
+  <header id="appHeader">
+    <h1>TapLog</h1>
+    <div class="muted">Crea botones, toca para registrar y edita las pulsaciones.</div>
+    <div class="compat">
+      <input type="checkbox" id="noBlur">
+      <label for="noBlur">Modo compatibilidad (desactivar difuminado si tapa botones)</label>
+    </div>
+  </header>
+  <main>
+    <section class="card">
+      <div class="row">
+        <input id="newTitle" type="text" placeholder="Título de la acción (p. ej., Gimnasio)">
+        <button class="primary" onclick="addAction()">Añadir</button>
+      </div>
+      <div style="margin-top:10px; display:flex; gap:10px; flex-wrap:wrap">
+        <button class="ghost" onclick="exportJSON()">Exportar JSON</button>
+        <button class="ghost" onclick="exportCSV()">Exportar CSV</button>
+        <button class="ghost" onclick="importJSON()">Importar</button>
+        <span class="pill" id="stats"></span>
+      </div>
+    </section>
+    <div id="actions"></div>
+  </main>
+
+  <template id="actionTemplate">
+    <section class="card">
+      <div class="action">
+        <div>
+          <div class="title"></div>
+          <div class="subtitle"></div>
+        </div>
+        <div class="grid" style="max-width: 260px">
+          <button class="primary tapBtn">Registrar</button>
+          <button class="ghost viewBtn">Ver</button>
+          <button class="ghost renameBtn">Renombrar</button>
+          <button class="ghost deleteBtn">Borrar</button>
+        </div>
+      </div>
+      <div class="logs list" style="margin-top:12px; display:none"></div>
+    </section>
+  </template>
+
+<script>
+const key="taplog.v1";let state=JSON.parse(localStorage.getItem(key)||'{"actions":[],"logs":{}}');function save(){localStorage.setItem(key,JSON.stringify(state));render();}function uid(){return Math.random().toString(36).slice(2,9);}function fmtCount(n){return n+(n===1?" pulsación":" pulsaciones");}function adjustPadding(){const h=document.getElementById("appHeader");const m=document.querySelector("main");if(h&&m){m.style.paddingTop=(h.offsetHeight+8)+"px";}}window.addEventListener("load",adjustPadding);window.addEventListener("resize",adjustPadding);document.addEventListener("DOMContentLoaded",()=>{const n=document.getElementById("noBlur");n.addEventListener("change",e=>{const h=document.getElementById("appHeader");if(e.target.checked){h.style.backdropFilter="none";h.style.webkitBackdropFilter="none";h.style.background="transparent";h.style.position="static";}else{h.style.position="sticky";h.style.background="linear-gradient(180deg, rgba(15,15,16,0.9), rgba(15,15,16,0.6), rgba(15,15,16,0))";h.style.backdropFilter="saturate(120%) blur(8px)";h.style.webkitBackdropFilter="saturate(120%) blur(8px)";}adjustPadding();});});function addAction(){const t=document.getElementById("newTitle").value.trim();if(!t)return;const id=uid();state.actions.push({id,title:t,createdAt:Date.now()});state.logs[id]=[];document.getElementById("newTitle").value="";save();}function deleteAction(id){if(confirm("¿Eliminar esta acción y sus registros?")){state.actions=state.actions.filter(a=>a.id!==id);delete state.logs[id];save();}}function renameAction(id){const a=state.actions.find(x=>x.id===id);const t=prompt("Nuevo título:",a.title);if(t){a.title=t.trim();save();}}function addLog(id){state.logs[id].push({id:uid(),ts:new Date().toISOString()});save();}function deleteLog(aid,lid){state.logs[aid]=state.logs[aid].filter(x=>x.id!==lid);save();}function render(){const r=document.getElementById("actions");r.innerHTML="";const total=state.actions.reduce((s,a)=>s+(state.logs[a.id]?.length||0),0);document.getElementById("stats").textContent=`${state.actions.length} acciones · ${total} registros`;if(!state.actions.length){r.innerHTML='<div class="card empty">No hay acciones aún.</div>';return;}for(const a of state.actions){const t=document.getElementById("actionTemplate").content.cloneNode(true);t.querySelector(".title").textContent=a.title;t.querySelector(".subtitle").textContent=fmtCount(state.logs[a.id]?.length||0);t.querySelector(".tapBtn").onclick=()=>addLog(a.id);t.querySelector(".renameBtn").onclick=()=>renameAction(a.id);t.querySelector(".deleteBtn").onclick=()=>deleteAction(a.id);const logsEl=t.querySelector(".logs");t.querySelector(".viewBtn").onclick=()=>{logsEl.style.display=logsEl.style.display==="none"?"flex":"none";renderLogs(a.id,logsEl);};r.appendChild(t);}}function renderLogs(aid,c){c.innerHTML="";const arr=(state.logs[aid]||[]).slice().sort((a,b)=>new Date(b.ts)-new Date(a.ts));if(!arr.length){c.innerHTML='<div class="muted">Sin registros</div>';return;}for(const item of arr){const d=document.createElement("div");d.className="log-item";const dt=document.createElement("input");dt.type="datetime-local";const dat=new Date(item.ts);dat.setMinutes(dat.getMinutes()-dat.getTimezoneOffset());dt.value=dat.toISOString().slice(0,16);dt.onchange=e=>{const v=new Date(e.target.value);item.ts=new Date(v.getTime()-v.getTimezoneOffset()*60000).toISOString();save();};const del=document.createElement("button");del.textContent="Borrar";del.className="ghost";del.onclick=()=>deleteLog(aid,item.id);d.appendChild(dt);d.appendChild(del);c.appendChild(d);}}render();
+</script>
+</body>
+</html>
